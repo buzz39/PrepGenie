@@ -32,12 +32,14 @@ A desktop application for Optical Character Recognition (OCR) with GPT-4 integra
    install_vcredist.bat
    ```
 
-2. Create a `.env` file in the same directory as the application with your API keys:
+2. Create a `.env` file in the same directory as the application with your API keys (copy from `.env.example`):
    ```
    AZURE_VISION_ENDPOINT=your_vision_endpoint_here
    AZURE_VISION_KEY=your_vision_key_here
    OPENAI_API_KEY=your_openai_api_key_here
    ```
+
+   ⚠️ **Security Note**: Never commit your `.env` file or share your API keys. The `.env` file is already in `.gitignore` to prevent accidental commits.
 
 3. Run the application by double-clicking `OCR Assistant.exe` in the `dist` folder.
 
