@@ -359,14 +359,14 @@ class OCRApp:
         
         title = ctk.CTkLabel(
             title_frame,
-            text="PrepGenie — AI Interview Assistant",
+            text="PrepGenie — Interview Prep Coach",
             font=("Helvetica", 24, "bold")
         )
         title.pack(pady=(0, 5))
         
         shortcut_label = ctk.CTkLabel(
             title_frame,
-            text="Press Ctrl+Shift+S to take a screenshot",
+            text="Load a practice question, get a model answer, and study smarter  |  Ctrl+Shift+S to capture",
             font=("Helvetica", 12)
         )
         shortcut_label.pack()
@@ -378,7 +378,7 @@ class OCRApp:
         # Default preview label
         self.preview_label = ctk.CTkLabel(
             self.preview_frame,
-            text="No image selected\nUse Ctrl+Shift+S to take a screenshot or select an image file",
+            text="No question loaded\nUse Ctrl+Shift+S to capture a practice question, or select an image file",
             font=("Helvetica", 16)
         )
         self.preview_label.pack(expand=True)
@@ -412,7 +412,7 @@ class OCRApp:
         # Process Image button
         self.process_btn = ctk.CTkButton(
             left_buttons_frame,
-            text="Process Image",
+            text="Analyse Question",
             command=self.process_image,
             state="disabled",
             font=("Helvetica", 14)

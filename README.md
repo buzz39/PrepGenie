@@ -1,6 +1,6 @@
-# PrepGenie — AI-Powered Interview Assistant
+# PrepGenie — AI-Powered Interview Prep Coach
 
-> A Windows desktop app that captures interview questions via screenshot or image upload, uses **Azure Computer Vision** for OCR, and leverages **OpenAI GPT-4** to generate structured, context-aware answers in real time.
+> A Windows desktop app that helps you **prepare for interviews** by turning practice questions into structured study material. Load a question from an image or screenshot, and let **Azure Computer Vision** + **OpenAI GPT-4** walk you through a model answer — so you can study, reflect, and build real confidence before the big day.
 
 [![CI](https://github.com/buzz39/PrepGenie/actions/workflows/python-app.yml/badge.svg)](https://github.com/buzz39/PrepGenie/actions/workflows/python-app.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -9,15 +9,28 @@
 
 ---
 
+## 🎯 Who Is This For?
+
+PrepGenie is built for **job seekers who want to practice smarter**:
+
+- **Self-study sessions** — Import questions from job postings, prep books, or practice sites and study model answers at your own pace.
+- **Mock-interview practice** — Run through questions solo and compare your answer against a structured AI-generated response to identify gaps.
+- **Learning interview frameworks** — See how the STAR method applies to real behavioural questions, or how to structure a technical explanation clearly.
+- **Career changers & new grads** — Build familiarity with unfamiliar question types before stepping into the room.
+
+> ⚠️ **Ethical Use**: PrepGenie is designed as an **offline study and preparation aid** — not for use during live interviews. Using AI assistance in an actual interview without disclosure is deceptive and undermines your own growth. Please use this tool responsibly.
+
+---
+
 ## ✨ Features
 
 | Feature | Description |
 |---|---|
-| 🖼️ **Screenshot Capture** | Select any region of your screen with `Ctrl+Shift+S` |
+| 🖼️ **Screenshot Capture** | Capture any practice question on screen with `Ctrl+Shift+S` for instant analysis |
 | 🔍 **Azure OCR** | Extracts text from images using Azure Computer Vision |
-| 🤖 **GPT-4 Analysis** | Classifies questions (technical vs. behavioural) and generates tailored answers |
-| 🗂️ **Response Modes** | Toggle between *Full Response* (structured, with examples) and *Answer Only* (concise) |
-| 🪟 **Floating Result Window** | Transparent, always-on-top answer overlay — no need to switch windows |
+| 🤖 **GPT-4 Coaching** | Classifies questions (technical vs. behavioural) and generates a model answer to study |
+| 🗂️ **Response Modes** | Toggle between *Full Response* (structured, with examples) and *Answer Only* (concise key points) |
+| 🪟 **Floating Study Panel** | Transparent, always-on-top panel lets you read the model answer while composing your own |
 | 🔔 **System Tray** | Minimizes to tray; accessible at all times without cluttering the taskbar |
 | 📊 **Timing Metrics** | Displays OCR and GPT-4 latency so you can benchmark your pipeline |
 
@@ -27,17 +40,17 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        PrepGenie Desktop App                    │
+│                      PrepGenie Desktop App                      │
 │                                                                 │
 │  ┌──────────────┐    ┌──────────────────┐    ┌──────────────┐  │
-│  │  Screenshot  │───▶│  Azure Computer  │───▶│   OpenAI     │  │
-│  │  / Image     │    │  Vision (OCR)    │    │   GPT-4      │  │
-│  │  Capture     │    │  REST API v3.2   │    │   API        │  │
+│  │  Practice    │───▶│  Azure Computer  │───▶│   OpenAI     │  │
+│  │  Question    │    │  Vision (OCR)    │    │   GPT-4      │  │
+│  │  Image       │    │  REST API v3.2   │    │   Coach      │  │
 │  └──────────────┘    └──────────────────┘    └──────┬───────┘  │
 │                                                      │          │
 │                                              ┌───────▼───────┐  │
 │                                              │ Floating       │  │
-│                                              │ Result Window  │  │
+│                                              │ Study Panel    │  │
 │                                              └───────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -83,11 +96,12 @@
 
 ## 🖱️ Usage
 
-1. **Select Image** — Click "Select Image" to load an image file containing text.
-2. **Take Screenshot** — Press `Ctrl+Shift+S` or click "Take Screenshot" to capture a screen region.
-3. **Process Image** — Click "Process Image" to run OCR and generate a GPT-4 answer.
-4. **Response Format** — Use the dropdown to switch between *Full Response* and *Answer Only*.
-5. **Close Overlay** — Click "Close All Windows" or right-click the floating result window to dismiss it.
+1. **Select Image** — Click "Select Image" to load an image of a practice question.
+2. **Take Screenshot** — Press `Ctrl+Shift+S` or click "Take Screenshot" to capture any question on your screen.
+3. **Analyse** — Click "Analyse Question" to extract the text and generate a model answer.
+4. **Study the Response** — Use the floating study panel to read the structured model answer and compare it against your own thinking.
+5. **Response Format** — Use the dropdown to switch between *Full Response* (full structured breakdown) and *Answer Only* (concise key points).
+6. **Close Panel** — Click "Close All Windows" or right-click the floating panel to dismiss it.
 
 ---
 
