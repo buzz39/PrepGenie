@@ -251,7 +251,7 @@ class OCRApp:
         
         # Setup window first
         self.window = ctk.CTk()
-        self.window.title("OCR Assistant")
+        self.window.title("PrepGenie")
         self.window.geometry("800x600")
         self.window.configure(fg_color="#2b2b2b")
         
@@ -284,7 +284,7 @@ class OCRApp:
         )
         
         # Create system tray icon
-        self.icon = pystray.Icon("OCR Assistant", icon_image, "OCR Assistant", menu)
+        self.icon = pystray.Icon("PrepGenie", icon_image, "PrepGenie", menu)
         
         # Start system tray icon in a separate thread
         threading.Thread(target=self.icon.run, daemon=True).start()
@@ -359,7 +359,7 @@ class OCRApp:
         
         title = ctk.CTkLabel(
             title_frame,
-            text="OCR Desktop Application",
+            text="PrepGenie — AI Interview Assistant",
             font=("Helvetica", 24, "bold")
         )
         title.pack(pady=(0, 5))

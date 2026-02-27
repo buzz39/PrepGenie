@@ -1,144 +1,170 @@
-# OCR Assistant
+# PrepGenie — AI-Powered Interview Assistant
 
-A desktop application for Optical Character Recognition (OCR) with GPT-4 integration for analyzing interview questions.
+> A Windows desktop app that captures interview questions via screenshot or image upload, uses **Azure Computer Vision** for OCR, and leverages **OpenAI GPT-4** to generate structured, context-aware answers in real time.
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
+[![CI](https://github.com/buzz39/PrepGenie/actions/workflows/python-app.yml/badge.svg)](https://github.com/buzz39/PrepGenie/actions/workflows/python-app.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
+[![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)](#requirements)
 
-## Features
+---
 
-- Image OCR using Azure Computer Vision
-- GPT-4 integration for analyzing interview questions
-- Screenshot capture with selection overlay
-- Floating transparent results window
-- Modern and clean user interface
-- Support for multiple image formats
-- Progress tracking and timing information
+## ✨ Features
 
-## Table of Contents
-- [Installation](#installation)
-- [Usage](#usage)
-- [Keyboard Shortcuts](#keyboard-shortcuts)
-- [Requirements](#requirements)
-- [Development](#development)
-- [Contributing](#contributing)
-- [Support](#support)
-- [License](#license)
-- [Changelog](#changelog)
+| Feature | Description |
+|---|---|
+| 🖼️ **Screenshot Capture** | Select any region of your screen with `Ctrl+Shift+S` |
+| 🔍 **Azure OCR** | Extracts text from images using Azure Computer Vision |
+| 🤖 **GPT-4 Analysis** | Classifies questions (technical vs. behavioural) and generates tailored answers |
+| 🗂️ **Response Modes** | Toggle between *Full Response* (structured, with examples) and *Answer Only* (concise) |
+| 🪟 **Floating Result Window** | Transparent, always-on-top answer overlay — no need to switch windows |
+| 🔔 **System Tray** | Minimizes to tray; accessible at all times without cluttering the taskbar |
+| 📊 **Timing Metrics** | Displays OCR and GPT-4 latency so you can benchmark your pipeline |
 
-## Installation
+---
 
-1. First, install the Visual C++ Redistributable by running:
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        PrepGenie Desktop App                    │
+│                                                                 │
+│  ┌──────────────┐    ┌──────────────────┐    ┌──────────────┐  │
+│  │  Screenshot  │───▶│  Azure Computer  │───▶│   OpenAI     │  │
+│  │  / Image     │    │  Vision (OCR)    │    │   GPT-4      │  │
+│  │  Capture     │    │  REST API v3.2   │    │   API        │  │
+│  └──────────────┘    └──────────────────┘    └──────┬───────┘  │
+│                                                      │          │
+│                                              ┌───────▼───────┐  │
+│                                              │ Floating       │  │
+│                                              │ Result Window  │  │
+│                                              └───────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Tech stack:** Python · CustomTkinter · Azure Cognitive Services · OpenAI Python SDK · PyAutoGUI · pystray
+
+---
+
+## 📋 Table of Contents
+- [Installation](#-installation)
+- [Usage](#-usage)
+- [Keyboard Shortcuts](#-keyboard-shortcuts)
+- [Requirements](#-requirements)
+- [Development](#-development)
+- [Contributing](#-contributing)
+- [Known Limitations](#-known-limitations)
+- [License](#-license)
+- [Changelog](#-changelog)
+
+---
+
+## 🚀 Installation
+
+### End-user (Windows executable)
+
+1. Install the Visual C++ Redistributable:
    ```
    install_vcredist.bat
    ```
 
-2. Create a `.env` file in the same directory as the application with your API keys (copy from `.env.example`):
-   ```
-   AZURE_VISION_ENDPOINT=your_vision_endpoint_here
-   AZURE_VISION_KEY=your_vision_key_here
+2. Create a `.env` file in the same directory as `PrepGenie.exe` (copy from [`.env.example`](.env.example)):
+   ```env
+   AZURE_VISION_ENDPOINT=https://your-resource.cognitiveservices.azure.com/
+   AZURE_VISION_KEY=your_azure_key_here
    OPENAI_API_KEY=your_openai_api_key_here
    ```
 
-   ⚠️ **Security Note**: Never commit your `.env` file or share your API keys. The `.env` file is already in `.gitignore` to prevent accidental commits.
+   > ⚠️ **Security Note**: Never commit your `.env` file or share your API keys. The `.env` file is already listed in `.gitignore`.
 
-3. Run the application by double-clicking `OCR Assistant.exe` in the `dist` folder.
+3. Launch `PrepGenie.exe` from the `dist` folder.
 
-## Usage
+---
 
-1. **Select Image**: Click "Select Image" to choose an image file containing text to analyze.
+## 🖱️ Usage
 
-2. **Take Screenshot**: Press `Ctrl+Shift+S` or click "Take Screenshot" to capture a portion of your screen.
+1. **Select Image** — Click "Select Image" to load an image file containing text.
+2. **Take Screenshot** — Press `Ctrl+Shift+S` or click "Take Screenshot" to capture a screen region.
+3. **Process Image** — Click "Process Image" to run OCR and generate a GPT-4 answer.
+4. **Response Format** — Use the dropdown to switch between *Full Response* and *Answer Only*.
+5. **Close Overlay** — Click "Close All Windows" or right-click the floating result window to dismiss it.
 
-3. **Process Image**: Click "Process Image" to perform OCR and get GPT-4 analysis.
+---
 
-4. **Response Format**: Choose between "Full Response" or "Answer Only" from the dropdown menu.
+## ⌨️ Keyboard Shortcuts
 
-5. **Close Windows**: Click "Close All Windows" to close any floating result windows.
+| Shortcut | Action |
+|---|---|
+| `Ctrl+Shift+S` | Capture a screen region |
+| Right-click result window | Close the floating window |
+| Click and drag result window | Reposition the overlay |
 
-## Keyboard Shortcuts
+---
 
-- `Ctrl+Shift+S`: Take a screenshot
-- Right-click on result window: Close the window
-- Click and drag result window: Move the window
+## 💻 Requirements
 
-## Requirements
+- Windows 10/11 (64-bit)
+- Visual C++ Redistributable 2015–2022
+- Active internet connection (for Azure + OpenAI API calls)
+- Minimum 4 GB RAM
+- ~100 MB free disk space
 
-- Windows 10/11 64-bit
-- Visual C++ Redistributable 2015-2022
-- Internet connection for API access
-- Minimum 4GB RAM recommended
-- 100MB free disk space
+---
 
-## Development
+## 🛠️ Development
 
-### Setting Up Development Environment
+### Setting Up
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/PrepGenie.git
-   cd PrepGenie
-   ```
+```bash
+git clone https://github.com/buzz39/PrepGenie.git
+cd PrepGenie
 
-2. Create and activate virtual environment:
-   ```bash
-   python -m venv venv
-   .\venv\Scripts\activate  # On Windows
-   ```
+python -m venv venv
+.\venv\Scripts\activate        # Windows
 
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+pip install -r requirements.txt
+```
 
-4. Set up your environment variables (see Installation section)
+Copy `.env.example` to `.env` and fill in your API keys (see [Installation](#-installation)).
 
-### Building from Source
+### Building the Executable
 
-1. Run the build script:
-   ```bash
-   .\build.bat
-   ```
-   This will create an executable in the `dist` folder.
+```bash
+.\build.bat
+```
+
+The executable will be created in the `dist/` folder.
 
 ### Running Tests
 
 ```bash
-python -m pytest tests/
+python -m pytest tests/ -v
 ```
 
-## Contributing
+---
 
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details on how to submit pull requests, report issues, and contribute to the project.
+## 🤝 Contributing
 
-## Support
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on pull requests, bug reports, and feature suggestions.
 
-If you encounter any issues:
-1. Make sure you have installed the Visual C++ Redistributable
-2. Verify your API keys in the `.env` file
-3. Check your internet connection
-4. Ensure you have sufficient permissions to run the application
+---
 
-For additional support:
-- Open an issue on GitHub
-- Check existing issues for solutions
-- Review the FAQ in our wiki
+## ⚠️ Known Limitations
 
-## Known Limitations
-
-- Maximum image size: 4MB
-- Supported image formats: PNG, JPG, JPEG, BMP
-- Text must be clearly visible and properly oriented
+- Maximum image size: 4 MB
+- Supported formats: PNG, JPG, JPEG, BMP
+- Text must be clearly visible and correctly oriented
 - Internet connection required for API calls
+- Windows only (GUI relies on Win32 APIs via tkinter)
 
-## License
+---
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## 📄 License
 
-## Changelog
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
-### Version 1.0.0 (2024-03-08)
-- Initial public release
-- Basic OCR functionality
-- GPT-4 integration
-- Screenshot capability
-- Floating window interface 
+---
+
+## 📝 Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a full history of releases.
