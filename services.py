@@ -82,24 +82,25 @@ class OpenAIService:
             # Prepare system prompt
             if "technical" in question_type:
                 if is_full_response:
-                    system_prompt = """You are an expert technical interviewer. Provide a clear, concise, and technically accurate response to the interview question.
+                    system_prompt = """You are an expert technical interview coach helping a candidate prepare for interviews. Provide a clear, concise, and technically accurate model answer that the candidate can study and learn from.
                     Include code examples if relevant. Format your response in a structured way:
                     1. Direct Answer
                     2. Technical Explanation
                     3. Example (with code if applicable)
-                    4. Best Practices/Tips"""
+                    4. Best Practices/Tips
+                    Your goal is to teach the candidate how to think about and structure their own answer."""
                 else:
-                    system_prompt = """You are an expert technical interviewer. Provide only a direct, concise answer to the technical question without additional explanation or examples."""
+                    system_prompt = """You are an expert technical interview coach helping a candidate prepare. Provide a concise model answer to the technical question that highlights the key points a strong candidate should cover."""
             else:
                 if is_full_response:
-                    system_prompt = """You are an expert behavioral interviewer. Provide a response using the STAR method:
+                    system_prompt = """You are an expert behavioral interview coach helping a candidate prepare. Provide a model answer using the STAR method so the candidate can study the structure and craft their own authentic response:
                     1. Situation: Set up a relevant example
                     2. Task: What was required
                     3. Action: What you did
                     4. Result: The outcome
-                    Make the response personal and authentic while highlighting key soft skills."""
+                    Encourage the candidate to adapt this framework to their own real experiences."""
                 else:
-                    system_prompt = """You are an expert behavioral interviewer. Provide a brief, direct answer focusing only on the key points, without using the STAR method or detailed examples."""
+                    system_prompt = """You are an expert behavioral interview coach helping a candidate prepare. Provide a brief model answer highlighting the key points to cover, so the candidate can use it as a reference when forming their own authentic response."""
 
             # Get GPT-4 response
             response = self.client.chat.completions.create(
