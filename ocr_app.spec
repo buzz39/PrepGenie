@@ -1,15 +1,19 @@
-# -*- mode: python ; coding: utf-8 -*-
+import importlib.util
+import os
 
 block_cipher = None
+
+# Resolve customtkinter path dynamically
+_ctk_spec = importlib.util.find_spec("customtkinter")
+_ctk_path = os.path.dirname(_ctk_spec.origin) if _ctk_spec else None
 
 a = Analysis(
     ['ocr_app.py'],
     pathex=[],
     binaries=[],
-    datas=[
-        ('C:\\Users\\thaku\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python312\\site-packages\\customtkinter', 'customtkinter'),
-        ('.env', '.'),  # Include .env file
-    ],
+    datas=(
+        [(_ctk_path, 'customtkinter')] if _ctk_path else []
+    ),
     hiddenimports=[
         'PIL._tkinter_finder',
         'keyboard.win32',
@@ -39,7 +43,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='OCR Assistant',
+    name='PrepGenie',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -51,5 +55,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='app_icon.ico'  # We'll create this icon
+    icon='app_icon.ico'
 ) 
