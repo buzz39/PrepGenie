@@ -15,6 +15,19 @@ from openai import OpenAI
 import httpx
 import pystray
 from pystray import MenuItem as item
+from services import AzureOCRService, OpenAIService
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('ocr_app.log')
+    ]
+)
+logger = logging.getLogger(__name__)
 
 class FloatingResultWindow:
     def __init__(self):
@@ -209,38 +222,32 @@ class OCRApp:
         # Load environment variables
         load_dotenv()
         
-        # Get Azure credentials
+        # Get credentials
         self.endpoint = os.getenv('AZURE_VISION_ENDPOINT', '').strip()
-        self.api_key = os.getenv('AZURE_VISION_KEY', '').strip()
-        self.openai_api_key = os.getenv('OPENAI_API_KEY', '').strip()
-        
-        if not self.endpoint or not self.api_key:
-            messagebox.showerror(
-                "Configuration Error",
-                "Please set AZURE_VISION_ENDPOINT and AZURE_VISION_KEY in .env file"
-            )
-            exit(1)
+        self.azure_key = os.getenv('AZURE_VISION_KEY', '').strip()
+        self.openai_key = os.getenv('OPENAI_API_KEY', '').strip()
 
-        if not self.openai_api_key:
-            messagebox.showerror(
-                "Configuration Error",
-                "Please set OPENAI_API_KEY in .env file"
+        # Initialize services gracefully
+        self.ocr_service = None
+        self.openai_service = None
+        
+        if not self.endpoint or not self.azure_key:
+            logger.warning("Azure credentials missing")
+            messagebox.showwarning(
+                "Configuration Warning",
+                "Azure Vision credentials not found. OCR functionality will be disabled."
             )
-            exit(1)
-            
-        # Initialize OpenAI client with custom httpx client
-        http_client = httpx.Client(
-            base_url="https://api.openai.com/v1",
-            follow_redirects=True
-        )
-        self.openai_client = OpenAI(
-            api_key=self.openai_api_key,
-            http_client=http_client
-        )
-            
-        # Ensure endpoint ends with '/'
-        if not self.endpoint.endswith('/'):
-            self.endpoint += '/'
+        else:
+            self.ocr_service = AzureOCRService(self.endpoint, self.azure_key)
+
+        if not self.openai_key:
+            logger.warning("OpenAI credentials missing")
+            messagebox.showwarning(
+                "Configuration Warning",
+                "OpenAI API key not found. GPT-4 functionality will be disabled."
+            )
+        else:
+            self.openai_service = OpenAIService(self.openai_key)
         
         # Setup window first
         self.window = ctk.CTk()
@@ -501,59 +508,13 @@ class OCRApp:
         thread = threading.Thread(target=lambda: self.perform_ocr(show_main))
         thread.start()
 
-    def get_gpt4_response(self, question):
-        try:
-            # Detect if it's a technical or behavioral question
-            question_type_response = self.openai_client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are an expert at classifying interview questions. Respond with only 'technical' or 'behavioral'."},
-                    {"role": "user", "content": f"Is this a technical or behavioral interview question? Question: {question}"}
-                ]
-            )
-            
-            question_type = question_type_response.choices[0].message.content.lower()
-            is_full_response = self.response_format.get() == "Full Response"
-
-            # Prepare system prompt based on question type and response format
-            if question_type == "technical":
-                if is_full_response:
-                    system_prompt = """You are an expert technical interviewer. Provide a clear, concise, and technically accurate response to the interview question. 
-                    Include code examples if relevant. Format your response in a structured way:
-                    1. Direct Answer
-                    2. Technical Explanation
-                    3. Example (with code if applicable)
-                    4. Best Practices/Tips"""
-                else:
-                    system_prompt = """You are an expert technical interviewer. Provide only a direct, concise answer to the technical question without additional explanation or examples."""
-            else:
-                if is_full_response:
-                    system_prompt = """You are an expert behavioral interviewer. Provide a response using the STAR method:
-                    1. Situation: Set up a relevant example
-                    2. Task: What was required
-                    3. Action: What you did
-                    4. Result: The outcome
-                    Make the response personal and authentic while highlighting key soft skills."""
-                else:
-                    system_prompt = """You are an expert behavioral interviewer. Provide a brief, direct answer focusing only on the key points, without using the STAR method or detailed examples."""
-
-            # Get GPT-4 response
-            response = self.openai_client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": question}
-                ]
-            )
-            
-            return response.choices[0].message.content
-        except Exception as e:
-            return f"Error generating response: {str(e)}"
-
     def perform_ocr(self, show_main=True):
         try:
             start_time = time.time()
             
+            if not self.ocr_service:
+                raise Exception("OCR service not initialized. Check your credentials.")
+
             if show_main:
                 self.result_text.delete("1.0", tk.END)
                 self.result_text.insert("end", "Processing image...\n")
@@ -563,61 +524,37 @@ class OCRApp:
             with open(self.selected_image_path, "rb") as image_file:
                 image_data = image_file.read()
 
-            # API endpoints
-            vision_url = f"{self.endpoint}vision/v3.2/read/analyze"
-            
-            # Request headers
-            headers = {
-                'Ocp-Apim-Subscription-Key': self.api_key,
-                'Content-Type': 'application/octet-stream'
-            }
-
-            # Call Azure's OCR API
             self.progress_bar.set(0.4)
-            response = requests.post(vision_url, headers=headers, data=image_data)
             
-            if response.status_code != 202:
-                raise Exception(f"Request failed with status {response.status_code}")
-
-            # Get the operation location URL
-            operation_url = response.headers["Operation-Location"]
-
-            # Wait for the operation to complete
-            while True:
-                time.sleep(1)
-                response = requests.get(operation_url, headers={
-                    'Ocp-Apim-Subscription-Key': self.api_key
-                })
-                result = response.json()
-
-                if result.get("status") not in ["notStarted", "running"]:
-                    break
+            # Call Azure's OCR API using service
+            logger.info(f"Analyzing image: {self.selected_image_path}")
+            question_text = self.ocr_service.analyze_image(image_data)
+            logger.info("Image analysis successful")
 
             self.progress_bar.set(0.8)
 
-            # Extract and display the text
-            if result.get("status") == "succeeded":
-                text_results = []
-                for read_result in result.get("analyzeResult", {}).get("readResults", []):
-                    for line in read_result.get("lines", []):
-                        text_results.append(line.get("text", ""))
-                
-                # Get the question text
-                question_text = "\n".join(text_results)
-                
-                # Calculate OCR processing time
-                ocr_time = time.time() - start_time
-                timer_text = f"OCR processing time: {ocr_time:.2f}s"
-                
-                # Show the question and "Generating response..." message
-                self.floating_window.set_text(question_text, timer_text=timer_text)
+            # Calculate OCR processing time
+            ocr_time = time.time() - start_time
+            timer_text = f"OCR processing time: {ocr_time:.2f}s"
+
+            # Show the question and "Generating response..." message
+            self.floating_window.set_text(question_text, timer_text=timer_text)
+            if show_main:
+                self.result_text.insert("end", f"\n{timer_text}\n\nGenerating GPT-4 response...")
+
+            if not self.openai_service:
+                logger.warning("OpenAI service not initialized, skipping GPT response")
                 if show_main:
-                    self.result_text.insert("end", f"\n{timer_text}\n\nGenerating GPT-4 response...")
-                
-                # Get GPT-4 response in a separate thread
-                def get_response():
+                    self.result_text.insert("end", "\n\nGPT-4 response disabled (missing API key).")
+                self.progress_bar.set(1.0)
+                return
+
+            # Get GPT-4 response in a separate thread
+            def get_response():
+                try:
                     gpt_start_time = time.time()
-                    response = self.get_gpt4_response(question_text)
+                    logger.info("Generating GPT-4 response")
+                    response = self.openai_service.get_response(question_text, self.response_format.get())
                     gpt_time = time.time() - gpt_start_time
                     total_time = time.time() - start_time
                     
@@ -627,17 +564,20 @@ class OCRApp:
                     if show_main:
                         self.result_text.delete("1.0", tk.END)
                         self.result_text.insert("end", f"{response}\n\n{timer_text}")
-                
-                threading.Thread(target=get_response).start()
-                
-            else:
-                error_msg = "Failed to process the image"
-                messagebox.showerror("Error", error_msg)
-                self.floating_window.set_text(error_msg)
+                    logger.info("GPT-4 response generated successfully")
+                except Exception as e:
+                    logger.error(f"Error generating response: {e}")
+                    error_msg = f"Error generating response: {str(e)}"
+                    if show_main:
+                        self.result_text.insert("end", f"\n\n{error_msg}")
+                    self.floating_window.set_text(error_msg)
+
+            threading.Thread(target=get_response).start()
 
             self.progress_bar.set(1.0)
             
         except Exception as e:
+            logger.error(f"OCR Error: {e}")
             error_msg = f"An error occurred: {str(e)}"
             messagebox.showerror("Error", error_msg)
             self.floating_window.set_text(error_msg)
