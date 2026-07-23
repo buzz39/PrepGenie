@@ -2,7 +2,7 @@ requests==2.34.2
 Pillow==12.3.0
 customtkinter==5.2.2
 python-dotenv==1.0.0
-pynput==1.7.6
+pynput==1.8.2
 pyautogui==0.9.54
 keyboard==0.13.5
 openai==1.12.0
