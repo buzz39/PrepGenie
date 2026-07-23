@@ -15,14 +15,24 @@ import pystray
 from pystray import MenuItem as item
 from services import AzureOCRService, OpenAIService
 import logging
+from logging.handlers import RotatingFileHandler
 
 # Configure logging
+log_directory = os.path.join(
+    os.getenv("LOCALAPPDATA", tempfile.gettempdir()),
+    "PrepGenie"
+)
+os.makedirs(log_directory, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler('ocr_app.log')
+        RotatingFileHandler(
+            os.path.join(log_directory, "ocr_app.log"),
+            maxBytes=1024 * 1024,
+            backupCount=3
+        )
     ]
 )
 logger = logging.getLogger(__name__)
@@ -528,6 +538,17 @@ class OCRApp:
         with Image.open(image_path) as image:
             image.verify()
 
+    def cleanup_temporary_image(self, image_path):
+        if image_path != self.temporary_image_path:
+            return
+        try:
+            os.remove(image_path)
+        except FileNotFoundError:
+            pass
+        self.temporary_image_path = None
+        if self.selected_image_path == image_path:
+            self.selected_image_path = None
+
     def process_image(self, show_main=True):
         if self.processing:
             return
@@ -538,9 +559,11 @@ class OCRApp:
             self.validate_image(self.selected_image_path)
         except (OSError, ValueError) as e:
             messagebox.showerror("Invalid Image", str(e))
+            self.cleanup_temporary_image(self.selected_image_path)
             return
         if not self.ocr_service:
             messagebox.showerror("Configuration Error", "OCR service is not configured.")
+            self.cleanup_temporary_image(self.selected_image_path)
             return
 
         self.processing = True
@@ -579,14 +602,7 @@ class OCRApp:
             self.result_text.insert("end", f"{response}\n\n{timer_text}")
 
     def finish_processing(self, image_path, show_main):
-        if image_path == self.temporary_image_path:
-            try:
-                os.remove(image_path)
-            except FileNotFoundError:
-                pass
-            self.temporary_image_path = None
-            if self.selected_image_path == image_path:
-                self.selected_image_path = None
+        self.cleanup_temporary_image(image_path)
 
         if show_main:
             self.progress_bar.pack_forget()
