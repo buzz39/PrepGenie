@@ -2,11 +2,27 @@ import requests
 import time
 from openai import OpenAI
 import httpx
+from urllib.parse import urlparse
+
+
+REQUEST_TIMEOUT = (5, 30)
+POLL_INTERVAL_SECONDS = 1
+POLL_TIMEOUT_SECONDS = 120
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+MAX_GET_ATTEMPTS = 3
 
 class AzureOCRService:
     def __init__(self, endpoint: str, api_key: str):
-        self.endpoint = endpoint
-        self.api_key = api_key
+        self.endpoint = endpoint.strip()
+        self.api_key = api_key.strip()
+
+        parsed_endpoint = urlparse(self.endpoint)
+        if parsed_endpoint.scheme != "https" or not parsed_endpoint.netloc:
+            raise ValueError("Azure Vision endpoint must be a valid HTTPS URL")
+        if not self.api_key:
+            raise ValueError("Azure Vision API key is required")
+
+        self.session = requests.Session()
 
         # Ensure endpoint ends with '/'
         if not self.endpoint.endswith('/'):
@@ -23,19 +39,33 @@ class AzureOCRService:
         }
 
         # Initial request
-        response = requests.post(vision_url, headers=headers, data=image_data)
+        if not image_data:
+            raise ValueError("Image data cannot be empty")
+
+        response = self.session.post(
+            vision_url,
+            headers=headers,
+            data=image_data,
+            timeout=REQUEST_TIMEOUT
+        )
         if response.status_code != 202:
             raise Exception(f"Request failed with status {response.status_code}")
 
         # Get operation URL
-        operation_url = response.headers["Operation-Location"]
+        operation_url = response.headers.get("Operation-Location")
+        if not operation_url:
+            raise Exception("Azure response did not include an operation URL")
+        if urlparse(operation_url).scheme != "https":
+            raise Exception("Azure returned an invalid operation URL")
 
         # Poll for results
+        deadline = time.monotonic() + POLL_TIMEOUT_SECONDS
         while True:
-            time.sleep(1)
-            response = requests.get(operation_url, headers={
-                'Ocp-Apim-Subscription-Key': self.api_key
-            })
+            if time.monotonic() >= deadline:
+                raise TimeoutError("Azure OCR operation timed out")
+            time.sleep(POLL_INTERVAL_SECONDS)
+            response = self._get_with_retry(operation_url)
+            response.raise_for_status()
             result = response.json()
 
             if result.get("status") not in ["notStarted", "running"]:
@@ -50,12 +80,35 @@ class AzureOCRService:
         else:
             raise Exception("Failed to process the image")
 
+    def _get_with_retry(self, operation_url):
+        headers = {'Ocp-Apim-Subscription-Key': self.api_key}
+        for attempt in range(MAX_GET_ATTEMPTS):
+            try:
+                response = self.session.get(
+                    operation_url,
+                    headers=headers,
+                    timeout=REQUEST_TIMEOUT
+                )
+                if response.status_code not in RETRYABLE_STATUS_CODES:
+                    return response
+            except requests.RequestException:
+                if attempt == MAX_GET_ATTEMPTS - 1:
+                    raise
+            if attempt < MAX_GET_ATTEMPTS - 1:
+                time.sleep(0.5 * (2 ** attempt))
+        return response
+
 
 class OpenAIService:
     def __init__(self, api_key: str):
+        api_key = api_key.strip()
+        if not api_key:
+            raise ValueError("OpenAI API key is required")
+
         http_client = httpx.Client(
             base_url="https://api.openai.com/v1",
-            follow_redirects=True
+            follow_redirects=True,
+            timeout=httpx.Timeout(60.0, connect=10.0)
         )
         self.client = OpenAI(
             api_key=api_key,
@@ -66,6 +119,10 @@ class OpenAIService:
         """
         Determines the question type and generates a response using GPT-4.
         """
+        question = question.strip()
+        if not question:
+            raise ValueError("Question cannot be empty")
+
         try:
             # Detect question type
             question_type_response = self.client.chat.completions.create(

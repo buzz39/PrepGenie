@@ -3,31 +3,42 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk, ImageDraw
 import os
+import queue
 import threading
-import requests
 import time
 from dotenv import load_dotenv
 import pyautogui
 import keyboard
 import tempfile
 from datetime import datetime
-from openai import OpenAI
-import httpx
 import pystray
 from pystray import MenuItem as item
 from services import AzureOCRService, OpenAIService
 import logging
+from logging.handlers import RotatingFileHandler
 
 # Configure logging
+log_directory = os.path.join(
+    os.getenv("LOCALAPPDATA", tempfile.gettempdir()),
+    "PrepGenie"
+)
+os.makedirs(log_directory, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler('ocr_app.log')
+        RotatingFileHandler(
+            os.path.join(log_directory, "ocr_app.log"),
+            maxBytes=1024 * 1024,
+            backupCount=3
+        )
     ]
 )
 logger = logging.getLogger(__name__)
+
+MAX_IMAGE_SIZE_BYTES = 4 * 1024 * 1024
+SUPPORTED_IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.bmp'}
 
 class FloatingResultWindow:
     def __init__(self):
@@ -221,6 +232,14 @@ class OCRApp:
     def __init__(self):
         # Load environment variables
         load_dotenv()
+        self.ui_queue = queue.Queue()
+
+        self.window = ctk.CTk()
+        self.window.title("PrepGenie")
+        self.window.geometry("800x600")
+        self.window.configure(fg_color="#2b2b2b")
+        self.window.attributes('-alpha', 1)
+        self.window.withdraw()
         
         # Get credentials
         self.endpoint = os.getenv('AZURE_VISION_ENDPOINT', '').strip()
@@ -238,7 +257,11 @@ class OCRApp:
                 "Azure Vision credentials not found. OCR functionality will be disabled."
             )
         else:
-            self.ocr_service = AzureOCRService(self.endpoint, self.azure_key)
+            try:
+                self.ocr_service = AzureOCRService(self.endpoint, self.azure_key)
+            except ValueError as e:
+                logger.warning("Invalid Azure configuration: %s", e)
+                messagebox.showwarning("Configuration Warning", str(e))
 
         if not self.openai_key:
             logger.warning("OpenAI credentials missing")
@@ -249,16 +272,6 @@ class OCRApp:
         else:
             self.openai_service = OpenAIService(self.openai_key)
         
-        # Setup window first
-        self.window = ctk.CTk()
-        self.window.title("PrepGenie")
-        self.window.geometry("800x600")
-        self.window.configure(fg_color="#2b2b2b")
-        
-        # Hide window from taskbar
-        self.window.attributes('-alpha', 1)  # Make sure window is visible
-        self.window.withdraw()  # Hide the window initially
-        
         # Create system tray icon
         self.create_system_tray()
         
@@ -266,10 +279,25 @@ class OCRApp:
         self.response_format = tk.StringVar(master=self.window, value="Full Response")
 
         self.selected_image_path = None
+        self.temporary_image_path = None
         self.screenshot_mode = False
+        self.processing = False
         self.floating_window = FloatingResultWindow()
         self.setup_ui()
         self.setup_screenshot_listener()
+        self.window.after(50, self.process_ui_queue)
+
+    def process_ui_queue(self):
+        while True:
+            try:
+                callback, args = self.ui_queue.get_nowait()
+            except queue.Empty:
+                break
+            callback(*args)
+        self.window.after(50, self.process_ui_queue)
+
+    def post_ui(self, callback, *args):
+        self.ui_queue.put((callback, args))
 
     def create_system_tray(self):
         # Create a simple icon (16x16 pixels)
@@ -278,9 +306,9 @@ class OCRApp:
         
         # Create menu items
         menu = (
-            item('Show', self.show_window),
-            item('Hide', self.hide_window),
-            item('Exit', self.quit_app)
+            item('Show', lambda *args: self.post_ui(self.show_window)),
+            item('Hide', lambda *args: self.post_ui(self.hide_window)),
+            item('Exit', lambda *args: self.post_ui(self.quit_app))
         )
         
         # Create system tray icon
@@ -307,10 +335,10 @@ class OCRApp:
         
     def handle_screenshot_key(self, e):
         if keyboard.is_pressed('ctrl+shift'):
-            self.start_screenshot()
+            self.post_ui(self.start_screenshot)
 
     def start_screenshot(self):
-        if not self.screenshot_mode:
+        if not self.screenshot_mode and not self.processing:
             self.screenshot_mode = True
             # Close the previous floating window if it exists
             self.floating_window.window.withdraw()
@@ -341,6 +369,7 @@ class OCRApp:
             
             # Process the screenshot without showing main window
             self.selected_image_path = screenshot_path
+            self.temporary_image_path = screenshot_path
             self.process_image(show_main=False)
             
         except Exception as e:
@@ -465,10 +494,15 @@ class OCRApp:
     def select_image(self):
         file_path = filedialog.askopenfilename(
             filetypes=[
-                ("Image files", "*.png *.jpg *.jpeg *.bmp *.gif *.tiff")
+                ("Image files", "*.png *.jpg *.jpeg *.bmp")
             ]
         )
         if file_path:
+            try:
+                self.validate_image(file_path)
+            except (OSError, ValueError) as e:
+                messagebox.showerror("Invalid Image", str(e))
+                return
             self.selected_image_path = file_path
             self.display_image(file_path)
             self.process_btn.configure(state="normal")
@@ -495,7 +529,44 @@ class OCRApp:
         self.image_label.pack(expand=True)
         self.process_btn.configure(state="normal")
 
+    def validate_image(self, image_path):
+        extension = os.path.splitext(image_path)[1].lower()
+        if extension not in SUPPORTED_IMAGE_EXTENSIONS:
+            raise ValueError("Supported image formats are PNG, JPG, JPEG, and BMP.")
+        if os.path.getsize(image_path) > MAX_IMAGE_SIZE_BYTES:
+            raise ValueError("Image must be 4 MB or smaller.")
+        with Image.open(image_path) as image:
+            image.verify()
+
+    def cleanup_temporary_image(self, image_path):
+        if image_path != self.temporary_image_path:
+            return
+        try:
+            os.remove(image_path)
+        except FileNotFoundError:
+            pass
+        self.temporary_image_path = None
+        if self.selected_image_path == image_path:
+            self.selected_image_path = None
+
     def process_image(self, show_main=True):
+        if self.processing:
+            return
+        if not self.selected_image_path:
+            messagebox.showerror("Image Required", "Select or capture an image first.")
+            return
+        try:
+            self.validate_image(self.selected_image_path)
+        except (OSError, ValueError) as e:
+            messagebox.showerror("Invalid Image", str(e))
+            self.cleanup_temporary_image(self.selected_image_path)
+            return
+        if not self.ocr_service:
+            messagebox.showerror("Configuration Error", "OCR service is not configured.")
+            self.cleanup_temporary_image(self.selected_image_path)
+            return
+
+        self.processing = True
         self.process_btn.configure(state="disabled")
         self.select_btn.configure(state="disabled")
         self.screenshot_btn.configure(state="disabled")
@@ -505,89 +576,102 @@ class OCRApp:
         self.progress_bar.set(0.2)
         
         # Start processing in a separate thread
-        thread = threading.Thread(target=lambda: self.perform_ocr(show_main))
+        response_format = self.response_format.get()
+        thread = threading.Thread(
+            target=self.perform_ocr,
+            args=(self.selected_image_path, show_main, response_format),
+            daemon=True
+        )
         thread.start()
 
-    def perform_ocr(self, show_main=True):
+    def update_processing_message(self, show_main):
+        if show_main:
+            self.result_text.delete("1.0", tk.END)
+            self.result_text.insert("end", "Processing image...\n")
+        self.floating_window.set_text("", answer="Processing image...")
+
+    def update_ocr_result(self, question_text, timer_text, show_main):
+        self.floating_window.set_text(question_text, timer_text=timer_text)
+        if show_main:
+            self.result_text.insert("end", f"\n{timer_text}\n\nGenerating GPT-4 response...")
+
+    def update_final_result(self, response, timer_text, show_main):
+        self.floating_window.update_answer(response, timer_text=timer_text)
+        if show_main:
+            self.result_text.delete("1.0", tk.END)
+            self.result_text.insert("end", f"{response}\n\n{timer_text}")
+
+    def finish_processing(self, image_path, show_main):
+        self.cleanup_temporary_image(image_path)
+
+        if show_main:
+            self.progress_bar.pack_forget()
+        self.progress_bar.set(0)
+        process_state = "normal" if self.selected_image_path else "disabled"
+        self.process_btn.configure(state=process_state)
+        self.select_btn.configure(state="normal")
+        self.screenshot_btn.configure(state="normal")
+        self.processing = False
+
+    def show_processing_error(self, error_msg):
+        messagebox.showerror("Error", error_msg)
+        self.floating_window.set_text("", answer=error_msg)
+
+    def perform_ocr(self, image_path, show_main=True, response_format="Full Response"):
         try:
             start_time = time.time()
-            
-            if not self.ocr_service:
-                raise Exception("OCR service not initialized. Check your credentials.")
 
-            if show_main:
-                self.result_text.delete("1.0", tk.END)
-                self.result_text.insert("end", "Processing image...\n")
-            self.floating_window.set_text("Processing image...")
+            self.post_ui(self.update_processing_message, show_main)
             
             # Read the image file
-            with open(self.selected_image_path, "rb") as image_file:
+            with open(image_path, "rb") as image_file:
                 image_data = image_file.read()
 
-            self.progress_bar.set(0.4)
+            self.post_ui(self.progress_bar.set, 0.4)
             
             # Call Azure's OCR API using service
-            logger.info(f"Analyzing image: {self.selected_image_path}")
+            logger.info("Analyzing selected image")
             question_text = self.ocr_service.analyze_image(image_data)
             logger.info("Image analysis successful")
 
-            self.progress_bar.set(0.8)
+            self.post_ui(self.progress_bar.set, 0.8)
 
             # Calculate OCR processing time
             ocr_time = time.time() - start_time
             timer_text = f"OCR processing time: {ocr_time:.2f}s"
 
             # Show the question and "Generating response..." message
-            self.floating_window.set_text(question_text, timer_text=timer_text)
-            if show_main:
-                self.result_text.insert("end", f"\n{timer_text}\n\nGenerating GPT-4 response...")
+            self.post_ui(self.update_ocr_result, question_text, timer_text, show_main)
 
             if not self.openai_service:
                 logger.warning("OpenAI service not initialized, skipping GPT response")
-                if show_main:
-                    self.result_text.insert("end", "\n\nGPT-4 response disabled (missing API key).")
-                self.progress_bar.set(1.0)
+                self.post_ui(
+                    self.update_final_result,
+                    "GPT-4 response disabled (missing API key).",
+                    timer_text,
+                    show_main
+                )
+                self.post_ui(self.progress_bar.set, 1.0)
                 return
 
-            # Get GPT-4 response in a separate thread
-            def get_response():
-                try:
-                    gpt_start_time = time.time()
-                    logger.info("Generating GPT-4 response")
-                    response = self.openai_service.get_response(question_text, self.response_format.get())
-                    gpt_time = time.time() - gpt_start_time
-                    total_time = time.time() - start_time
-                    
-                    timer_text = f"OCR processing: {ocr_time:.2f}s\nGPT-4 response: {gpt_time:.2f}s\nTotal time: {total_time:.2f}s"
-                    self.floating_window.update_answer(response, timer_text=timer_text)
-                    
-                    if show_main:
-                        self.result_text.delete("1.0", tk.END)
-                        self.result_text.insert("end", f"{response}\n\n{timer_text}")
-                    logger.info("GPT-4 response generated successfully")
-                except Exception as e:
-                    logger.error(f"Error generating response: {e}")
-                    error_msg = f"Error generating response: {str(e)}"
-                    if show_main:
-                        self.result_text.insert("end", f"\n\n{error_msg}")
-                    self.floating_window.set_text(error_msg)
+            gpt_start_time = time.time()
+            logger.info("Generating GPT-4 response")
+            response = self.openai_service.get_response(question_text, response_format)
+            gpt_time = time.time() - gpt_start_time
+            total_time = time.time() - start_time
 
-            threading.Thread(target=get_response).start()
-
-            self.progress_bar.set(1.0)
+            timer_text = f"OCR processing: {ocr_time:.2f}s\nGPT-4 response: {gpt_time:.2f}s\nTotal time: {total_time:.2f}s"
+            self.post_ui(self.update_final_result, response, timer_text, show_main)
+            self.post_ui(self.progress_bar.set, 1.0)
+            logger.info("GPT-4 response generated successfully")
             
         except Exception as e:
             logger.error(f"OCR Error: {e}")
             error_msg = f"An error occurred: {str(e)}"
-            messagebox.showerror("Error", error_msg)
-            self.floating_window.set_text(error_msg)
+            self.post_ui(self.show_processing_error, error_msg)
         
         finally:
-            if show_main:
-                self.progress_bar.pack_forget()
-            self.process_btn.configure(state="normal")
-            self.select_btn.configure(state="normal")
-            self.screenshot_btn.configure(state="normal")
+            self.post_ui(self.finish_processing, image_path, show_main)
 
     def close_all_windows(self):
         # Close the floating window
