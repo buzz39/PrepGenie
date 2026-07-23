@@ -92,7 +92,7 @@ PrepGenie is built for **job seekers who want to practice smarter**:
 
    > ⚠️ **Security Note**: Never commit your `.env` file or share your API keys. The `.env` file is already listed in `.gitignore`.
 
-3. Launch `PrepGenie.exe` from the `dist` folder.
+3. Launch `PrepGenie.exe` from the `dist\PrepGenie` folder. The build produces a folder (not a single file) — distribute the whole `dist\PrepGenie` folder together, not just the `.exe`.
 
 ---
 
