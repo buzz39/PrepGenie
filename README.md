@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/buzz39/PrepGenie/actions/workflows/python-app.yml/badge.svg)](https://github.com/buzz39/PrepGenie/actions/workflows/python-app.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)](#requirements)
 
 ---
@@ -18,7 +18,9 @@ PrepGenie is built for **job seekers who want to practice smarter**:
 - **Learning interview frameworks** — See how the STAR method applies to real behavioural questions, or how to structure a technical explanation clearly.
 - **Career changers & new grads** — Build familiarity with unfamiliar question types before stepping into the room.
 
-> ⚠️ **Ethical Use**: PrepGenie is designed as an **offline study and preparation aid** — not for use during live interviews. Using AI assistance in an actual interview without disclosure is deceptive and undermines your own growth. Please use this tool responsibly.
+> ⚠️ **Ethical Use**: PrepGenie is designed as a **personal study and preparation aid** — not for use during live interviews. Using AI assistance in an actual interview without disclosure is deceptive and undermines your own growth. Please use this tool responsibly.
+
+> 🔒 **Privacy**: PrepGenie sends selected images to Azure Computer Vision for OCR, then sends the extracted question text to OpenAI to generate a response. Do not process confidential, personal, or employer-proprietary material. Review the providers' privacy and data-retention terms before use. Screenshots are temporarily stored in your operating system's temporary directory.
 
 ---
 

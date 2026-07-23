@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 import requests_mock
 from services import AzureOCRService, OpenAIService
 
@@ -43,7 +43,8 @@ class TestAzureOCRService:
             ]
         )
 
-        result = service.analyze_image(image_data)
+        with patch("services.POLL_INTERVAL_SECONDS", 0):
+            result = service.analyze_image(image_data)
         assert result == "Hello\nWorld"
 
     def test_analyze_image_initial_failure(self, service, requests_mock):
@@ -67,7 +68,25 @@ class TestAzureOCRService:
             json={"status": "failed"}
         )
 
-        with pytest.raises(Exception, match="Failed to process the image"):
+        with patch("services.POLL_INTERVAL_SECONDS", 0):
+            with pytest.raises(Exception, match="Failed to process the image"):
+                service.analyze_image(b"data")
+
+    def test_rejects_non_https_endpoint(self):
+        with pytest.raises(ValueError, match="valid HTTPS URL"):
+            AzureOCRService(endpoint="http://example.com", api_key="test-key")
+
+    def test_rejects_empty_image(self, service):
+        with pytest.raises(ValueError, match="cannot be empty"):
+            service.analyze_image(b"")
+
+    def test_analyze_image_requires_operation_url(self, service, requests_mock):
+        requests_mock.post(
+            f"{service.endpoint}vision/v3.2/read/analyze",
+            status_code=202
+        )
+
+        with pytest.raises(Exception, match="operation URL"):
             service.analyze_image(b"data")
 
 
