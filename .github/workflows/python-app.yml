@@ -44,3 +44,7 @@ jobs:
     - name: Test with pytest
       run: |
         pytest tests/ -v 
+
+    - name: Build Windows executable
+      run: |
+        python -m PyInstaller --clean ocr_app.spec

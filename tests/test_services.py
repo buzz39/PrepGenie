@@ -1,6 +1,5 @@
 import pytest
 from unittest.mock import MagicMock, patch
-import requests_mock
 from services import AzureOCRService, OpenAIService
 
 class TestAzureOCRService:
@@ -89,6 +88,16 @@ class TestAzureOCRService:
         with pytest.raises(Exception, match="operation URL"):
             service.analyze_image(b"data")
 
+    def test_analyze_image_rejects_insecure_operation_url(self, service, requests_mock):
+        requests_mock.post(
+            f"{service.endpoint}vision/v3.2/read/analyze",
+            status_code=202,
+            headers={"Operation-Location": "http://example.com/result"}
+        )
+
+        with pytest.raises(Exception, match="invalid operation URL"):
+            service.analyze_image(b"data")
+
 
 class TestOpenAIService:
     @pytest.fixture
@@ -149,3 +158,7 @@ class TestOpenAIService:
 
         with pytest.raises(Exception, match="Error generating response: API Error"):
             service.get_response("Question")
+
+    def test_get_response_rejects_empty_question(self, service):
+        with pytest.raises(ValueError, match="cannot be empty"):
+            service.get_response("  ")

@@ -223,6 +223,13 @@ class OCRApp:
         # Load environment variables
         load_dotenv()
         self.ui_queue = queue.Queue()
+
+        self.window = ctk.CTk()
+        self.window.title("PrepGenie")
+        self.window.geometry("800x600")
+        self.window.configure(fg_color="#2b2b2b")
+        self.window.attributes('-alpha', 1)
+        self.window.withdraw()
         
         # Get credentials
         self.endpoint = os.getenv('AZURE_VISION_ENDPOINT', '').strip()
@@ -255,16 +262,6 @@ class OCRApp:
         else:
             self.openai_service = OpenAIService(self.openai_key)
         
-        # Setup window first
-        self.window = ctk.CTk()
-        self.window.title("PrepGenie")
-        self.window.geometry("800x600")
-        self.window.configure(fg_color="#2b2b2b")
-        
-        # Hide window from taskbar
-        self.window.attributes('-alpha', 1)  # Make sure window is visible
-        self.window.withdraw()  # Hide the window initially
-        
         # Create system tray icon
         self.create_system_tray()
         
@@ -272,6 +269,7 @@ class OCRApp:
         self.response_format = tk.StringVar(master=self.window, value="Full Response")
 
         self.selected_image_path = None
+        self.temporary_image_path = None
         self.screenshot_mode = False
         self.processing = False
         self.floating_window = FloatingResultWindow()
@@ -298,9 +296,9 @@ class OCRApp:
         
         # Create menu items
         menu = (
-            item('Show', lambda: self.post_ui(self.show_window)),
-            item('Hide', lambda: self.post_ui(self.hide_window)),
-            item('Exit', lambda: self.post_ui(self.quit_app))
+            item('Show', lambda *args: self.post_ui(self.show_window)),
+            item('Hide', lambda *args: self.post_ui(self.hide_window)),
+            item('Exit', lambda *args: self.post_ui(self.quit_app))
         )
         
         # Create system tray icon
@@ -361,6 +359,7 @@ class OCRApp:
             
             # Process the screenshot without showing main window
             self.selected_image_path = screenshot_path
+            self.temporary_image_path = screenshot_path
             self.process_image(show_main=False)
             
         except Exception as e:
@@ -557,7 +556,7 @@ class OCRApp:
         response_format = self.response_format.get()
         thread = threading.Thread(
             target=self.perform_ocr,
-            args=(show_main, response_format),
+            args=(self.selected_image_path, show_main, response_format),
             daemon=True
         )
         thread.start()
@@ -579,11 +578,21 @@ class OCRApp:
             self.result_text.delete("1.0", tk.END)
             self.result_text.insert("end", f"{response}\n\n{timer_text}")
 
-    def finish_processing(self, show_main):
+    def finish_processing(self, image_path, show_main):
+        if image_path == self.temporary_image_path:
+            try:
+                os.remove(image_path)
+            except FileNotFoundError:
+                pass
+            self.temporary_image_path = None
+            if self.selected_image_path == image_path:
+                self.selected_image_path = None
+
         if show_main:
             self.progress_bar.pack_forget()
         self.progress_bar.set(0)
-        self.process_btn.configure(state="normal")
+        process_state = "normal" if self.selected_image_path else "disabled"
+        self.process_btn.configure(state=process_state)
         self.select_btn.configure(state="normal")
         self.screenshot_btn.configure(state="normal")
         self.processing = False
@@ -592,20 +601,20 @@ class OCRApp:
         messagebox.showerror("Error", error_msg)
         self.floating_window.set_text("", answer=error_msg)
 
-    def perform_ocr(self, show_main=True, response_format="Full Response"):
+    def perform_ocr(self, image_path, show_main=True, response_format="Full Response"):
         try:
             start_time = time.time()
 
             self.post_ui(self.update_processing_message, show_main)
             
             # Read the image file
-            with open(self.selected_image_path, "rb") as image_file:
+            with open(image_path, "rb") as image_file:
                 image_data = image_file.read()
 
             self.post_ui(self.progress_bar.set, 0.4)
             
             # Call Azure's OCR API using service
-            logger.info(f"Analyzing image: {self.selected_image_path}")
+            logger.info("Analyzing selected image")
             question_text = self.ocr_service.analyze_image(image_data)
             logger.info("Image analysis successful")
 
@@ -646,7 +655,7 @@ class OCRApp:
             self.post_ui(self.show_processing_error, error_msg)
         
         finally:
-            self.post_ui(self.finish_processing, show_main)
+            self.post_ui(self.finish_processing, image_path, show_main)
 
     def close_all_windows(self):
         # Close the floating window

@@ -8,6 +8,8 @@ from urllib.parse import urlparse
 REQUEST_TIMEOUT = (5, 30)
 POLL_INTERVAL_SECONDS = 1
 POLL_TIMEOUT_SECONDS = 120
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+MAX_GET_ATTEMPTS = 3
 
 class AzureOCRService:
     def __init__(self, endpoint: str, api_key: str):
@@ -19,6 +21,8 @@ class AzureOCRService:
             raise ValueError("Azure Vision endpoint must be a valid HTTPS URL")
         if not self.api_key:
             raise ValueError("Azure Vision API key is required")
+
+        self.session = requests.Session()
 
         # Ensure endpoint ends with '/'
         if not self.endpoint.endswith('/'):
@@ -38,7 +42,7 @@ class AzureOCRService:
         if not image_data:
             raise ValueError("Image data cannot be empty")
 
-        response = requests.post(
+        response = self.session.post(
             vision_url,
             headers=headers,
             data=image_data,
@@ -60,9 +64,7 @@ class AzureOCRService:
             if time.monotonic() >= deadline:
                 raise TimeoutError("Azure OCR operation timed out")
             time.sleep(POLL_INTERVAL_SECONDS)
-            response = requests.get(operation_url, headers={
-                'Ocp-Apim-Subscription-Key': self.api_key
-            }, timeout=REQUEST_TIMEOUT)
+            response = self._get_with_retry(operation_url)
             response.raise_for_status()
             result = response.json()
 
@@ -77,6 +79,24 @@ class AzureOCRService:
             return "\n".join(text_results)
         else:
             raise Exception("Failed to process the image")
+
+    def _get_with_retry(self, operation_url):
+        headers = {'Ocp-Apim-Subscription-Key': self.api_key}
+        for attempt in range(MAX_GET_ATTEMPTS):
+            try:
+                response = self.session.get(
+                    operation_url,
+                    headers=headers,
+                    timeout=REQUEST_TIMEOUT
+                )
+                if response.status_code not in RETRYABLE_STATUS_CODES:
+                    return response
+            except requests.RequestException:
+                if attempt == MAX_GET_ATTEMPTS - 1:
+                    raise
+            if attempt < MAX_GET_ATTEMPTS - 1:
+                time.sleep(0.5 * (2 ** attempt))
+        return response
 
 
 class OpenAIService:
